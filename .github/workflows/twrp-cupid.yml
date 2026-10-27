@@ -26,7 +26,7 @@ on:
       build_target:
         description: "Product/lunch target"
         required: false
-        default: "twrp_cupid-12.1-eng"
+        default: "twrp_cupid-12-eng"
 
 jobs:
   build:
