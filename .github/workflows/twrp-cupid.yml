@@ -1,0 +1,140 @@
+name: Build TWRP (cupid / Xiaomi 12)
+
+on:
+  workflow_dispatch:
+    inputs:
+      manifest_url:
+        description: "TWRP base manifest URL"
+        required: false
+        default: "https://github.com/minimal-manifest-twrp/platform_manifest_twrp_aosp.git"
+      manifest_branch:
+        description: "Manifest branch (TWRP version)"
+        required: false
+        default: "twrp-14.1"
+      device_tree:
+        description: "Device tree repo URL (empty = this repository)"
+        required: false
+        default: ""
+      device_tree_branch:
+        description: "Device tree branch (empty = this repo's default branch)"
+        required: false
+        default: ""
+      device_path:
+        description: "Path inside the tree where the device sources go"
+        required: false
+        default: "device/xiaomi/cupid"
+      build_target:
+        description: "Product/lunch target"
+        required: false
+        default: "twrp_cupid-eng"
+
+jobs:
+  build:
+    name: Build recoveryimage
+    runs-on: ubuntu-latest
+    timeout-minutes: 350
+
+    env:
+      WORKDIR: /home/runner/work/twrp-source
+
+    steps:
+      - name: Free up runner disk space
+        run: |
+          sudo rm -f /etc/apt/sources.list.d/dotnetdev.list \
+                     /etc/apt/sources.list.d/microsoft-prod.list
+          sudo apt-get -qq update
+          sudo apt-get -qq remove --purge '^dotnet*' '^ghc*' '^llvm*' '^mono*' \
+            '^microsoft*' '^mysql*' '^postgres*' '^mssql*' azure-cli \
+            google-chrome-stable firefox powershell 2>/dev/null || true
+          sudo apt-get -qq autoremove --purge
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc \
+                      /usr/local/.ghc /etc/mysql /etc/postgresql /etc/mssql \
+                      /usr/lib/firefox /opt/hostedtoolcache
+          sudo rm -rf /usr/local/bin/azcopy /usr/lib/node_modules
+          df -h /
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get -qq update
+          sudo apt-get -qq install -y git-core gnupg flex bison build-essential \
+            zip curl zlib1g-dev gcc-multilib g++-multilib libc6-dev-i386 \
+            lib32ncurses-dev x11proto-core-dev libx11-dev lib32z-dev libgl1 \
+            libxml2-utils xsltproc unzip fontconfig bc repo cpio ccache mkisofs \
+            file python3 python3-pip aria2
+          sudo curl -fL https://storage.googleapis.com/git-repo-downloads/repo \
+            -o /usr/local/bin/repo || true
+          sudo chmod +x /usr/local/bin/repo || sudo apt-get -qq install -y repo
+
+      - name: Configure git
+        run: |
+          git config --global user.name "twrp-ci-builder"
+          git config --global user.email "twrp-ci-builder@users.noreply.github.com"
+
+      - name: Initialize repo workspace
+        run: |
+          mkdir -p "$WORKDIR"
+          cd "$WORKDIR"
+          repo init --depth=1 \
+            -u "${{ github.event.inputs.manifest_url || 'https://github.com/minimal-manifest-twrp/platform_manifest_twrp_aosp.git' }}" \
+            -b "${{ github.event.inputs.manifest_branch || 'twrp-12.1' }}"
+
+      - name: Add local manifest for cupid
+        run: |
+          cd "$WORKDIR"
+          mkdir -p .repo/local_manifests
+          DT_URL="${{ github.event.inputs.device_tree }}"
+          DT_BRANCH="${{ github.event.inputs.device_tree_branch }}"
+          if [ -z "$DT_URL" ]; then DT_URL="https://github.com/${GITHUB_REPOSITORY}"; fi
+          if [ -z "$DT_BRANCH" ]; then
+            DT_BRANCH=$(curl -fsSL "https://api.github.com/repos/${GITHUB_REPOSITORY}" | grep '"default_branch"' | cut -d '"' -f4)
+          fi
+          cat > .repo/local_manifests/local_manifest.xml <<EOF
+          <manifest>
+            <project path="${{ github.event.inputs.device_path || 'device/xiaomi/cupid' }}"
+                     name="${DT_URL#https://github.com/}" remote="github"
+                     revision="$DT_BRANCH" />
+          </manifest>
+          EOF
+          cat .repo/local_manifests/local_manifest.xml
+
+      - name: Sync repository
+        run: |
+          cd "$WORKDIR"
+          repo sync -c --no-clone-bundle --no-tags -j$(nproc --all) --fail-fast
+          df -h /
+
+      - name: Build recoveryimage
+        run: |
+          cd "$WORKDIR"
+          source build/envsetup.sh
+          lunch "${{ github.event.inputs.build_target || 'twrp_cupid-eng' }}"
+          make recoveryimage -j$(nproc --all) ALLOW_MISSING_DEPENDENCIES=true
+          df -h /
+
+      - name: Locate build output
+        id: out
+        run: |
+          cd "$WORKDIR"
+          DEVICE_DIR=$(find out/target/product -maxdepth 1 -mindepth 1 -type d | head -n1)
+          echo "dir=$DEVICE_DIR" >> "$GITHUB_OUTPUT"
+          ls -l "$DEVICE_DIR"/*.img || true
+
+      - name: Zip recovery image
+        run: |
+          cd "$WORKDIR/${{ steps.out.outputs.dir }}"
+          zip -r9 "twrp-cupid-${GITHUB_RUN_NUMBER}.zip" recovery.img \
+            $(ls *.sticks_default *.vbmeta 2>/dev/null | head -n5)
+
+      - name: Upload recovery image artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: twrp-cupid-${{ github.run_number }}
+          path: |
+            ${{ steps.out.outputs.dir }}/recovery.img
+          compression-level: 0
+
+      - name: Upload full zip artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: twrp-cupid-zip-${{ github.run_number }}
+          path: ${{ steps.out.outputs.dir }}/twrp-cupid-${{ github.run_number }}.zip
