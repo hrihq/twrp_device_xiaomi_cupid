@@ -105,7 +105,8 @@ jobs:
         run: |
           cd "$WORKDIR"
           source build/envsetup.sh
-          lunch "${{ github.event.inputs.build_target || 'twrp_cupid-12-eng' }}"
+          lunch "${{ github.event.inputs.build_target || 'twrp_cupid-12-userdebug' }}"
+          export TARGET_PLATFORM_VERSION="12"
           make recoveryimage -j$(nproc --all) ALLOW_MISSING_DEPENDENCIES=true
           df -h /
 
