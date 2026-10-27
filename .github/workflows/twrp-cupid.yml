@@ -10,7 +10,7 @@ on:
       manifest_branch:
         description: "Manifest branch (TWRP version)"
         required: false
-        default: "twrp-14.1"
+        default: "twrp-12.1"
       device_tree:
         description: "Device tree repo URL (empty = this repository)"
         required: false
@@ -26,7 +26,7 @@ on:
       build_target:
         description: "Product/lunch target"
         required: false
-        default: "twrp_cupid-eng"
+        default: "twrp_cupid-12.1-eng"
 
 jobs:
   build:
