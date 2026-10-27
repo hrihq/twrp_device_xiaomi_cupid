@@ -7,6 +7,5 @@ PRODUCT_MAKEFILES := \
     $(LOCAL_DIR)/twrp_cupid.mk
 
 COMMON_LUNCH_CHOICES := \
-    twrp_cupid-12-user \
-    twrp_cupid-12-userdebug \
-    twrp_cupid-12-eng
+    twrp_cupid-cupid-userdebug \
+    twrp_cupid-cupid-eng
