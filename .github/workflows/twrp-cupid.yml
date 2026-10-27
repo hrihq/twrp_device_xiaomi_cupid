@@ -85,9 +85,7 @@ jobs:
           DT_URL="${{ github.event.inputs.device_tree }}"
           DT_BRANCH="${{ github.event.inputs.device_tree_branch }}"
           if [ -z "$DT_URL" ]; then DT_URL="https://github.com/${GITHUB_REPOSITORY}"; fi
-          if [ -z "$DT_BRANCH" ]; then
-            DT_BRANCH=$(curl -fsSL "https://api.github.com/repos/${GITHUB_REPOSITORY}" | grep '"default_branch"' | cut -d '"' -f4)
-          fi
+          if [ -z "$DT_BRANCH" ]; then DT_BRANCH="${GITHUB_REF_NAME}"; fi
           cat > .repo/local_manifests/local_manifest.xml <<EOF
           <manifest>
             <project path="${{ github.event.inputs.device_path || 'device/xiaomi/cupid' }}"
