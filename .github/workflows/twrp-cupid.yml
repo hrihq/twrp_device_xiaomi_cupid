@@ -26,7 +26,11 @@ on:
       build_target:
         description: "Product/lunch target"
         required: false
-        default: "twrp_cupid-12-userdebug"
+        default: "twrp_cupid-eng"
+      target_platform_version:
+        description: "TARGET_PLATFORM_VERSION (QP1A for twrp-12.1, SP2A for twrp-14.1)"
+        required: false
+        default: "QP1A"
 
 jobs:
   build:
@@ -101,12 +105,29 @@ jobs:
           repo sync -c --no-clone-bundle --no-tags -j$(nproc --all) --fail-fast
           df -h /
 
+      - name: Patch USB-OTG block devices
+        run: |
+          cd "$WORKDIR"
+          FLAGS="${{ github.event.inputs.device_path || 'device/xiaomi/cupid' }}/recovery/root/system/etc/twrp.flags"
+          if [ -f "$FLAGS" ]; then
+            sed -i -e 's|/dev/block/sdh1|/dev/block/sda1|g' \
+                   -e 's|/dev/block/sdh\([[:space:]]\)|/dev/block/sda\1|g' "$FLAGS"
+            grep -n usbstorage "$FLAGS"
+          else
+            echo "twrp.flags not found at $FLAGS"
+          fi
+
       - name: Build recoveryimage
         run: |
           cd "$WORKDIR"
           source build/envsetup.sh
-          export TARGET_PLATFORM_VERSION="QP1A"  # Android 12 (API 31) for Cupid
-          lunch "${{ github.event.inputs.build_target || 'twrp_cupid-12-userdebug' }}"
+          export TARGET_PLATFORM_VERSION="${{ github.event.inputs.target_platform_version || 'QP1A' }}"
+          TARGET="${{ github.event.inputs.build_target || 'twrp_cupid-eng' }}"
+          if ! lunch "$TARGET"; then
+            echo "::warning::lunch $TARGET failed, trying fallbacks"
+            lunch twrp_cupid-userdebug || lunch twrp_cupid-12-userdebug || {
+              echo "::error::no valid lunch combo found"; exit 1; }
+          fi
           make recoveryimage -j$(nproc --all) ALLOW_MISSING_DEPENDENCIES=true
           df -h /
 
