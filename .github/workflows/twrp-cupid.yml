@@ -136,14 +136,26 @@ jobs:
         run: |
           cd "$WORKDIR"
           DEVICE_DIR=$(find out/target/product -maxdepth 1 -mindepth 1 -type d | head -n1)
-          echo "dir=$DEVICE_DIR" >> "$GITHUB_OUTPUT"
-          ls -l "$DEVICE_DIR"/*.img || true
+          if [ -z "$DEVICE_DIR" ]; then
+            echo "::error::no product output directory found"; exit 1
+          fi
+          ABS_DIR="$WORKDIR/$DEVICE_DIR"
+          echo "dir=$ABS_DIR" >> "$GITHUB_OUTPUT"
+          echo "DEVICE_DIR=$ABS_DIR"
+          ls -l "$ABS_DIR"/*.img || true
+          if [ ! -f "$ABS_DIR/recovery.img" ]; then
+            echo "::error::recovery.img missing in $ABS_DIR"
+            find "$WORKDIR/out" -name 'recovery*.img' -o -name '*.img' 2>/dev/null | head -n20
+            exit 1
+          fi
+          echo "recovery.img OK: $(du -h "$ABS_DIR/recovery.img" | cut -f1)"
 
       - name: Zip recovery image
         run: |
-          cd "$WORKDIR/${{ steps.out.outputs.dir }}"
+          cd "${{ steps.out.outputs.dir }}"
           zip -r9 "twrp-cupid-${GITHUB_RUN_NUMBER}.zip" recovery.img \
             $(ls *.sticks_default *.vbmeta 2>/dev/null | head -n5)
+          ls -l "twrp-cupid-${GITHUB_RUN_NUMBER}.zip"
 
       - name: Upload recovery image artifact
         uses: actions/upload-artifact@v4
