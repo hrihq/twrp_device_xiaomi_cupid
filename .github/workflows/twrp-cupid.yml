@@ -26,7 +26,7 @@ on:
       build_target:
         description: "Product/lunch target"
         required: false
-        default: "twrp_cupid-12-eng"
+        default: "twrp_cupid-12-userdebug"
 
 jobs:
   build:
@@ -105,7 +105,6 @@ jobs:
         run: |
           cd "$WORKDIR"
           source build/envsetup.sh
-          export TARGET_PLATFORM_VERSION="12.1"
           lunch "${{ github.event.inputs.build_target || 'twrp_cupid-12-userdebug' }}"
           make recoveryimage -j$(nproc --all) ALLOW_MISSING_DEPENDENCIES=true
           df -h /
